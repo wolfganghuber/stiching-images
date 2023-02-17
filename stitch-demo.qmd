@@ -167,17 +167,26 @@ print(object.size(ci), units = "GB")
 Paste the tiles into `ci`.
 ```{r}
 #| label: ci2
+system.time({
+
 for(k in seq(along = imgList)) {
   ci[ toPixelIndex1(toPhysicalSpaceX(seq_len(imgDim[1]), k)),
       toPixelIndex2(toPhysicalSpaceY(seq_len(imgDim[2]), k)), ] =  imgList[[k]]
   
 }
+
+})
 ```
 
-Look at the middle focal plane of the combined image.
+Look at the combined image, one plot for each of the 7 z-planes.
 
 ```{r}
-display(normalize(ci[,,4]))
+#| label: display
+#| layout-nrow: 1
+#| fig-width: !expr dim(ci)[1] / 2000
+#| fig-height: !expr dim(ci)[2] / 2000
+for (i in seq_len(dim(ci)[3]))
+  display(normalize(ci[,,i]))
 ```
 
 Write mosaic stack.
