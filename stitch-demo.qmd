@@ -10,7 +10,7 @@ format:
 ```{r}
 #| label: initialize
 #| echo: false
-knitr::opts_chunk$set(cache = TRUE, autodep = TRUE)
+knitr::opts_chunk$set(cache = FALSE)
 ```
 
 This demo tries to show how to improve performance of image stitching, based on a prior attempt by Ludwig Geistlinger, [stitch.R](stitch.R).
@@ -18,7 +18,7 @@ This demo tries to show how to improve performance of image stitching, based on 
 Download data. (I used the awscli package from Homebrew)
 ```{sh}
 #| eval: FALSE
-aws s3 cp s3://hmsrc-ccb-data1/merfish_hypothalamus/AnteriorSlices_mod/dapi/ /Users/whuber/tmp --recursive --no-sign-request option
+aws s3 cp s3://hmsrc-ccb-data1/merfish_hypothalamus/AnteriorSlices_mod/dapi/ /Users/whuber/svnco/stiching-images/img/ --recursive --no-sign-request option
 ```
 
 ```{r} 
@@ -54,7 +54,7 @@ fov     = read.csv(fovFile)
 #| label: visfov
 #| fig-width: 6
 #| fig-height: 6
-ggplot(fov, aes(x = fovPosX, y = fovPosY, label = fovID)) + geom_text() + theme_minimal()
+ggplot(fov, aes(x = fovPosX, y = fovPosY, label = fovID)) + geom_text(size = 2) + theme_minimal()
 ```
 
 ```{r}
@@ -67,13 +67,13 @@ ggplot(corners) +
   theme_minimal()
 ```
 
-For demo, we'll here restrict to first 36 tiles - then this works easily on my 16 GB Macbook. Switch to a machine with a little more RAM and remove the below chunk for full task.
+For demo, we'll here restrict to first 27 tiles - then this works easily on my 16 GB Macbook. Switch to a machine with more RAM and remove the below chunk for the full task.
 
 ```{r}
 #| label: subset
-stopifnot(identical(ids[1:36], 0:35))
-imgFiles = imgFiles[1:36]
-ids      = ids[1:36]
+stopifnot(identical(ids[1:27], 0:26))
+imgFiles = imgFiles[1:27]
+ids      = ids[1:27]
 ```
  
 Read images
@@ -83,17 +83,24 @@ imgList = lapply(imgFiles, EBImage::readImage, as.is = TRUE)
 print(object.size(imgList), units = "GB")
 ```
 
-A utility function that takes a vector, makes sure all elements are the same, and returns that value
+Look at the middle focal plane of the first tile.
+
+```{r}
+display(normalize(imgList[[1]][,,4]))
+```
+
+A utility function that takes a vector, makes sure all elements are the same, and returns that value.
+
 ```{r}
 #| label: getTheUniqueValue
 getTheUniqueValue = function(x) {
   rv = x[1]
-  stopifnot(all(x==rv))
+  stopifnot(all(x == rv))
   rv
 }
 ```
 
-Subset field-of-view and corners dataframe with those present in the image files 
+Subset field-of-view and corners dataframe for only those tiles present in the image files. 
 
 ```{r}
 #| label: subsetfovandcornes
@@ -111,15 +118,18 @@ Coordinate and index computations
 #| label: coords
 # image array dimensions
 allDims = vapply(imgList, dim, integer(3))
-imgDim = apply(allDims, 1, getTheUniqueValue)
+imgDim = apply(allDims, 1, getTheUniqueValue) 
+imgDim
 
 # physical dimensions
 sizeX = getTheUniqueValue(with(corners, xEnd-xStart))
 sizeY = getTheUniqueValue(with(corners, yEnd-yStart))
+c(sizeX, sizeY)
 
 # these two should be the same if the image is isotropic, but for sake of generality we can keep separate variables
 pixelSizeX = sizeX / imgDim[1]
 pixelSizeY = sizeY / imgDim[2]  
+c(pixelSizeX, pixelSizeY)
 
 # lower left corner of the full, combined image
 minX = min(corners$xStart)
@@ -130,25 +140,33 @@ fullSizeX = max(corners$xEnd) - minX
 fullSizeY = max(corners$yEnd) - minY
 
 # map first index of image tile k into physical x-space 
-toPhysicalSpaceX = function(i, k) corners$xStart[k] + pixelSizeX * (i-1)
+toPhysicalSpaceX = function(i, k) corners$xStart[k] + pixelSizeX * (i - 1)
 # map second index of image tile k into physical y-space 
-toPhysicalSpaceY = function(i, k) corners$yStart[k] + pixelSizeX * (i-1)
+toPhysicalSpaceY = function(i, k) corners$yStart[k] + pixelSizeY * (i - 1)
 
 # map physical x-coordinate into pixel coordinate in the combined image 
-toPixelIndex1 = function(x) as.integer((x-minX) / pixelSizeX + 1)
-toPixelIndex2 = function(y) as.integer((y-minY) / pixelSizeY + 1)
+toPixelIndex1 = function(x) as.integer((x - minX) / pixelSizeX + 1)
+toPixelIndex2 = function(y) as.integer((y - minY) / pixelSizeY + 1)
 ```
 
-Create an object for the full combined image
+Create an object for the full combined image.
+
 ```{r}
-#| label: ci
-dimCombined = c(round(fullSizeX/pixelSizeX), round(fullSizeY/pixelSizeY), imgDim[3])
+#| label: ci1
+dimCombined = c(round(fullSizeX / pixelSizeX), 
+                round(fullSizeY / pixelSizeY), 
+                imgDim[3])
+dimCombined
 mode = getTheUniqueValue(vapply(imgList, function(x) storage.mode(imageData(x)), character(1)))
+mode
 
 ci =  Image(do.call(mode, list(1)), dim = dimCombined, colormode = "Grayscale") 
 print(object.size(ci), units = "GB")
+```
 
-# paste tiles into `ci`
+Paste the tiles into `ci`.
+```{r}
+#| label: ci2
 for(k in seq(along = imgList)) {
   ci[ toPixelIndex1(toPhysicalSpaceX(seq_len(imgDim[1]), k)),
       toPixelIndex2(toPhysicalSpaceY(seq_len(imgDim[2]), k)), ] =  imgList[[k]]
@@ -156,8 +174,16 @@ for(k in seq(along = imgList)) {
 }
 ```
 
-Write mosaic stack
+Look at the middle focal plane of the combined image.
+
+```{r}
+display(normalize(ci[,,4]))
+```
+
+Write mosaic stack.
+
 ```{r}
 #| label: write
+#| eval: FALSE
 EBImage::writeImage(ci, "mosaic.tiff", type = "tiff")
 ```
