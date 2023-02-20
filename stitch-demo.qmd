@@ -13,7 +13,19 @@ format:
 knitr::opts_chunk$set(cache = FALSE)
 ```
 
-This demo tries to show how to improve performance of image stitching, based on a prior attempt by Ludwig Geistlinger, [stitch.R](stitch.R).
+This demo tries to show how to improve performance of image stitching, based on a prior attempt by Ludwig Geistlinger, [stitch.R](stitch.R), which had excessive compute resource needs. I identified a few issues:
+
+- It uses EBImage::combine, which is recursive, it basically does what the pseudocode below shows, and for a list of $81$ images, it will use around $81*80/2 \approx 3200$ times the space of a single tile, rather $81$ times as an efficient implementation (e.g., as below) would do. Since a single tile has about 112 MB, this amounts to difference betweem 350 GB and 8.5 GB, which on current hardware can make a  difference. In fact, `EBImage::combine` or `EBImage::tile` are not well suited for the task at hand. We should have new function that essentially does the below, based on regular R array subset operations. The only "complicated" thing here is dealing with the physical coordinates of the tiles, i.e., the fact that they are usually not precisely adjacent, and rather tend to overlap (or have gaps between them).
+   
+- It does the stitching separately for each of the 7 z-planes, which creates 7x overhead in I/O compared to doing it at once (e.g., as below).
+
+```{r}
+#| eval: false
+combine = function (x, y, ...) 
+   if (length(list(...)) > 0L) 
+       combine(x, do.call(combine, list(y, ...)))
+   else combine(x,y)
+```
 
 Download data. (I used the awscli package from Homebrew)
 ```{sh}
@@ -164,7 +176,8 @@ ci =  Image(do.call(mode, list(1)), dim = dimCombined, colormode = "Grayscale")
 print(object.size(ci), units = "GB")
 ```
 
-Paste the tiles into `ci`.
+Paste the tiles into `ci`. Note this can be done for all the z-planes at the same time.
+
 ```{r}
 #| label: ci2
 system.time({
