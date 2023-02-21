@@ -1,8 +1,7 @@
 ############################################################
 # 
-# author: Ludwig Geistlinger
-# date: 2022-07-28 10:25:49
-# 
+# author: NA (details available upon request from W.Huber)
+#  
 # descr: script for stitching image tiles into a mosaic
 #
 # usage: Rscript stitch.R <img.dir> <prefix> <fov> <corners>
