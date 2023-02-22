@@ -30,7 +30,7 @@ combine = function (x, y, ...)
 Download data. (I used the awscli package from Homebrew)
 ```{sh}
 #| eval: FALSE
-aws s3 cp s3://hmsrc-ccb-data1/merfish_hypothalamus/AnteriorSlices_mod/dapi/ /Users/whuber/svnco/stiching-images/img/ --recursive --no-sign-request option
+aws s3 cp s3://hmsrc-ccb-data1/merfish_hypothalamus/AnteriorSlices_mod/dapi/ /Users/whuber/svnco/stiching-images/img/ --recursive --no-sign-request
 ```
 
 ```{r} 
